@@ -16,9 +16,14 @@ activity_colors = {
     "write": (232, 140, 48),
     "inactive": (225, 54, 112),
 }
-class_thresholds = {"hand-raising": 0.1, "read": 0.1, "write": 0.1}
+class_thresholds = {
+    "hand-raising": 0.3,
+    "read": 0.3,
+    "write": 0.3,
+}  # Adjusted threshold
 VOTING_WINDOW = 15
 INACTIVE_DISPLAY_FRAMES = 60
+shrink_ratio = 0.1  # shrink YOLO bounding boxes by 10%
 
 # === Load Model & Tracker ===
 model = YOLO(
@@ -66,13 +71,17 @@ while cap.isOpened():
     results = model(frame)[0]
 
     detections = []
+    bbox_mapping = {}  # Maps YOLO boxes to Deep SORT track IDs
+
     for det in results.boxes:
         cls = int(det.cls)
         class_name = model.names[cls]
         conf = float(det.conf)
         if class_name in class_thresholds and conf > class_thresholds[class_name]:
             x1, y1, x2, y2 = map(int, det.xyxy[0])
-            detections.append(([x1, y1, x2 - x1, y2 - y1], conf, class_name))
+            w_box, h_box = x2 - x1, y2 - y1
+            detections.append(([x1, y1, w_box, h_box], conf, class_name))
+            bbox_mapping[(x1, y1, x2, y2)] = class_name  # Save for later display
 
     # === Tracking ===
     tracks = tracker.update_tracks(detections, frame=frame)
@@ -81,11 +90,23 @@ while cap.isOpened():
     for track in tracks:
         if not track.is_confirmed():
             continue
-
         track_id = track.track_id
         class_name = track.get_det_class()
-        l, t, w_box, h_box = map(int, track.to_ltrb())
-        r, b = l + w_box, t + h_box
+
+        # Get Deep SORT bounding box (ltrb)
+        l, t, r, b = map(int, track.to_ltrb())
+        w_box = r - l
+        h_box = b - t
+
+        # Shrink box
+        cx = l + w_box // 2
+        cy = t + h_box // 2
+        new_w = int(w_box * (1 - shrink_ratio))
+        new_h = int(h_box * (1 - shrink_ratio))
+        l = max(0, cx - new_w // 2)
+        t = max(0, cy - new_h // 2)
+        r = min(width, cx + new_w // 2)
+        b = min(height, cy + new_h // 2)
 
         seen_ids.add(track_id)
         all_tracks[track_id] = (l, t, r, b)
@@ -94,6 +115,7 @@ while cap.isOpened():
         color = activity_colors.get(voted_class, (255, 255, 255))
         label = f"{voted_class} | ID {track_id}"
 
+        # Draw box
         cv2.rectangle(frame_disp, (l, t), (r, b), color, 2)
         (label_width, label_height), _ = cv2.getTextSize(
             label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
