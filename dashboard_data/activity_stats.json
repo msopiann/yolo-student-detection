@@ -1,0 +1,10 @@
+{
+    "counts": {
+        "hand-raising": 3,
+        "read": 1
+    },
+    "durations": {
+        "hand-raising": 31.33,
+        "read": 3.0
+    }
+}
