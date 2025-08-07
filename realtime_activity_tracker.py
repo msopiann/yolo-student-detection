@@ -27,7 +27,7 @@ shrink_ratio = 0.1  # shrink YOLO bounding boxes by 10%
 
 # === Load Model & Tracker ===
 model = YOLO(
-    "D:/sopian/skripsi/code-for-model/student_behavior_analysis/yolov11m_best.pt"
+    "yolov11m_best.pt"
 )
 tracker = DeepSort(max_age=30)
 
